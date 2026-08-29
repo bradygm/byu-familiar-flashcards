@@ -35,6 +35,7 @@ class CreateCardRequest(BaseModel):
 class StartSessionRequest(BaseModel):
     mode: str
     limit: int = Field(default=15, ge=1, le=200)
+    card_ids: list[str] | None = Field(default=None, max_length=200)
 
 
 class ReviewRequest(BaseModel):
@@ -202,7 +203,16 @@ def start_session(course_id: str, request: StartSessionRequest):
         cards_to_choose = [card_row(row) for row in rows]
         if not cards_to_choose:
             raise HTTPException(status_code=400, detail="Approve or add cards before starting a session")
-        if request.mode == "all":
+        if request.card_ids is not None:
+            selected_ids = list(dict.fromkeys(request.card_ids))
+            if not selected_ids:
+                raise HTTPException(status_code=400, detail="Choose at least one card to restart a session")
+            cards_by_id = {card["id"]: card for card in cards_to_choose}
+            missing_ids = [card_id for card_id in selected_ids if card_id not in cards_by_id]
+            if missing_ids:
+                raise HTTPException(status_code=400, detail="One or more cards are no longer available")
+            selected = [cards_by_id[card_id] for card_id in selected_ids]
+        elif request.mode == "all":
             import random
             random.shuffle(cards_to_choose)
             selected = cards_to_choose

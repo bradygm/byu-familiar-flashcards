@@ -1,6 +1,7 @@
 const app = document.querySelector('#app');
 let currentCourse = null;
 let study = null;
+let scoring = false;
 
 async function api(path, options = {}) {
   const response = await fetch(`/api${path}`, { headers: { 'Content-Type': 'application/json' }, ...options });
@@ -10,8 +11,17 @@ async function api(path, options = {}) {
 const esc = (value) => String(value).replace(/[&<>'"]/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]));
 const initials = (card) => `${card.first_name[0] || ''}${card.last_name[0] || ''}`.toUpperCase();
 const courseLink = (course) => `#/course/${course.id}`;
-const portrait = (card) => card.image_path ? `<img class="avatar portrait" src="/assets/${encodeURI(card.image_path)}" alt="Portrait of ${esc(card.first_name)} ${esc(card.last_name)}">` : `<div class="avatar">${initials(card)}</div>`;
+const portraitUrl = (card) => `/assets/${encodeURI(card.image_path)}`;
+const portrait = (card) => card.image_path ? `<img class="avatar portrait" src="${portraitUrl(card)}" alt="Portrait of ${esc(card.first_name)} ${esc(card.last_name)}">` : `<div class="avatar">${initials(card)}</div>`;
 const studiedLabel = (timestamp) => timestamp ? `Last studied ${new Intl.DateTimeFormat(undefined, {month:'short', day:'numeric', year:'numeric'}).format(new Date(timestamp))}` : 'Ready to learn';
+
+async function preloadPortrait(card) {
+  if (!card?.image_path) return;
+  const image = new Image();
+  image.src = portraitUrl(card);
+  if (image.decode) await image.decode().catch(() => {});
+  else await new Promise(resolve => { image.onload = image.onerror = resolve; });
+}
 
 function setView(html) { app.innerHTML = html; }
 function notice(message) { return `<p class="notice">${esc(message)}</p>`; }
@@ -61,7 +71,19 @@ function setupView(course, count) {
   document.querySelector('#setup-back').addEventListener('click', event => { event.preventDefault(); courseView(course.id); });
   document.querySelectorAll('[data-mode]').forEach(button => button.addEventListener('click', () => { mode = button.dataset.mode; document.querySelectorAll('[data-mode]').forEach(item => item.classList.toggle('selected', item === button)); document.querySelector('.range').classList.toggle('hidden', mode === 'all'); document.querySelector('#base-size').firstChild.textContent = mode === 'morris' ? 'Base people: ' : 'Adaptive session length: '; const input = document.querySelector('#length'); input.max = mode === 'morris' ? Math.max(5, Math.min(15, count)) : Math.max(5, Math.min(50, count)); if (+input.value > +input.max) { input.value = input.max; document.querySelector('#length-label').textContent = input.value; } }));
   document.querySelector('#length').addEventListener('input', e => document.querySelector('#length-label').textContent = e.target.value);
-  document.querySelector('#begin').addEventListener('click', async () => { try { const result = await api(`/courses/${course.id}/sessions`, {method:'POST', body:JSON.stringify({mode,limit:+document.querySelector('#length').value})}); study = {...result, index:0, revealed:false}; if (mode === 'morris') { study = {...study, remaining:[...result.cards], pending:[], current:null, stages:{}, reviews:0, maxReviews:Math.min(60, Math.max(15, result.cards.length * 5))}; advanceMorris(); } studyView(); } catch(error) { document.querySelector('#setup-notice').innerHTML = notice(error.message); } });
+  document.querySelector('#begin').addEventListener('click', async () => { try { const result = await api(`/courses/${course.id}/sessions`, {method:'POST', body:JSON.stringify({mode,limit:+document.querySelector('#length').value})}); initializeStudy(result); await preloadPortrait(currentCard()); studyView(); } catch(error) { document.querySelector('#setup-notice').innerHTML = notice(error.message); } });
+}
+
+function initializeStudy(result) {
+  study = {...result, index:0, revealed:false};
+  if (study.mode === 'morris') {
+    study = {...study, remaining:[...result.cards], pending:[], current:null, stages:{}, reviews:0, maxReviews:Math.min(60, Math.max(15, result.cards.length * 5))};
+    advanceMorris();
+  }
+}
+
+function currentCard() {
+  return study?.mode === 'morris' ? study.current : study?.cards[study.index];
 }
 
 function advanceMorris() {
@@ -73,12 +95,12 @@ function advanceMorris() {
 }
 
 function studyView() {
-  const card = study.mode === 'morris' ? study.current : study.cards[study.index];
+  const card = currentCard();
   if (!card) return completeStudy();
   const complete = study.mode === 'morris' ? Math.round((study.reviews / study.maxReviews) * 100) : Math.round((study.index / study.cards.length) * 100);
   const sessionTitle = study.mode === 'all' ? 'All cards' : study.mode === 'morris' ? 'Expanding recall' : 'Adaptive review';
   const position = study.mode === 'morris' ? `${study.reviews + 1} / up to ${study.maxReviews}` : `${study.index + 1} / ${study.cards.length}`;
-  setView(`<div class="study-wrap"><div class="session-meta"><span>${sessionTitle}</span><span>${position}</span></div><div class="study-card" id="flashcard" role="button" tabindex="0" aria-label="Flip card">${portrait(card)}${study.revealed ? `<div class="answer"><div class="eyebrow">The answer</div><div class="name">${esc(card.first_name)} ${esc(card.last_name)}</div>${card.facts.length ? `<ul>${card.facts.map(fact=>`<li>${esc(fact)}</li>`).join('')}</ul>` : ''}</div>` : `<div><div class="eyebrow">Your turn</div><h1>Name this student.</h1><p>Flip when you have an answer in mind.</p></div>`}</div><div class="study-actions">${study.revealed ? `<button class="button danger" id="wrong">Wrong <span class="key">W</span></button><button class="button" id="right">Right <span class="key">R</span></button>` : `<button class="button secondary" id="flip">Flip card <span class="key">Space</span></button><button class="button" id="right">Right <span class="key">R</span></button>`}</div><div class="fine" style="margin-top:18px">${complete}% complete · <span class="key">Esc</span> to end session</div></div>`);
+  setView(`<div class="study-wrap"><div class="session-meta"><span>${sessionTitle}</span><span>${position}</span></div><div class="study-card" id="flashcard" role="button" tabindex="0" aria-label="Flip card">${portrait(card)}<div class="study-copy">${study.revealed ? `<div class="answer"><div class="eyebrow">The answer</div><div class="name">${esc(card.first_name)} ${esc(card.last_name)}</div>${card.facts.length ? `<ul>${card.facts.map(fact=>`<li>${esc(fact)}</li>`).join('')}</ul>` : ''}</div>` : `<div><div class="eyebrow">Your turn</div><h1>Name this student.</h1><p>Flip when you have an answer in mind.</p></div>`}</div></div><div class="study-actions">${study.revealed ? `<button class="button danger" id="wrong">Wrong <span class="key">W</span></button><button class="button" id="right">Right <span class="key">R</span></button>` : `<button class="button secondary" id="flip">Flip card <span class="key">Space</span></button><button class="button" id="right">Right <span class="key">R</span></button>`}</div><div class="fine" style="margin-top:18px">${complete}% complete · <span class="key">Esc</span> to end session</div></div>`);
   const reveal = () => { if (!study.revealed) { study.revealed = true; studyView(); } };
   document.querySelector('#flashcard').addEventListener('click', reveal); document.querySelector('#flashcard').addEventListener('keydown', event => { if(event.key === 'Enter' || event.key === ' ') { event.preventDefault(); reveal(); } });
   document.querySelector('#flip')?.addEventListener('click', reveal);
@@ -86,10 +108,57 @@ function studyView() {
   document.querySelector('#wrong')?.addEventListener('click', () => score('wrong'));
 }
 
-async function score(result) { const card = study.mode === 'morris' ? study.current : study.cards[study.index]; await api(`/sessions/${study.id}/reviews`, {method:'POST',body:JSON.stringify({card_id:card.id,result})}); if (study.mode === 'morris') { study.reviews += 1; const stage = result === 'right' ? (study.stages[card.id] || 0) + 1 : 0; study.stages[card.id] = stage; if (result === 'wrong' || stage < 3) study.pending.push({card, readyAt:study.reviews + (result === 'wrong' ? 2 : stage === 1 ? 3 : 7)}); if (study.reviews >= study.maxReviews) return completeStudy(); advanceMorris(); if (!study.current) return completeStudy(); } else study.index += 1; study.revealed = false; studyView(); }
-async function completeStudy() { const result = await api(`/sessions/${study.id}/complete`, {method:'POST'}); const accuracy = result.reviewed_count ? Math.round(result.right_count / result.reviewed_count * 100) : 0; setView(`<section class="setup"><div class="eyebrow">Session complete</div><h1>${accuracy}% correct.</h1><p class="fine">You reviewed ${result.reviewed_count} people: ${result.right_count} right and ${result.wrong_count} wrong. Your next adaptive session will adjust from what you just learned.</p><div class="actions"><a class="button" id="complete-back" href="${courseLink(currentCourse)}">Back to course</a></div></section>`); study = null; document.querySelector('#complete-back').addEventListener('click', event => { event.preventDefault(); courseView(currentCourse.id); }); }
+async function score(result) {
+  if (scoring || !study) return;
+  scoring = true;
+  const card = currentCard();
+  try {
+    await api(`/sessions/${study.id}/reviews`, {method:'POST',body:JSON.stringify({card_id:card.id,result})});
+    if (study.mode === 'morris') {
+      study.reviews += 1;
+      const stage = result === 'right' ? (study.stages[card.id] || 0) + 1 : 0;
+      study.stages[card.id] = stage;
+      if (result === 'wrong' || stage < 3) study.pending.push({card, readyAt:study.reviews + (result === 'wrong' ? 2 : stage === 1 ? 3 : 7)});
+      if (study.reviews >= study.maxReviews) return completeStudy();
+      advanceMorris();
+    } else {
+      study.index += 1;
+    }
+    if (!currentCard()) return completeStudy();
+    study.revealed = false;
+    await preloadPortrait(currentCard());
+    studyView();
+  } finally {
+    scoring = false;
+  }
+}
 
-document.addEventListener('keydown', event => { if (!study || ['INPUT','SELECT','TEXTAREA'].includes(document.activeElement.tagName)) return; if ((event.key === ' ' || event.key === 'Enter') && !study.revealed) { event.preventDefault(); study.revealed = true; studyView(); } if (event.key.toLowerCase() === 'r') score('right'); if (study.revealed && event.key.toLowerCase() === 'w') score('wrong'); if (event.key === 'Escape') completeStudy(); });
+async function completeStudy() {
+  if (!study) return;
+  const finishedStudy = study;
+  const result = await api(`/sessions/${finishedStudy.id}/complete`, {method:'POST'});
+  const accuracy = result.reviewed_count ? Math.round(result.right_count / result.reviewed_count * 100) : 0;
+  const restart = finishedStudy.mode === 'all' ? '' : `<button class="button secondary" id="restart-same">Study these ${finishedStudy.cards.length} people again</button>`;
+  setView(`<section class="setup"><div class="eyebrow">Session complete</div><h1>${accuracy}% correct.</h1><p class="fine">You reviewed ${result.reviewed_count} people: ${result.right_count} right and ${result.wrong_count} wrong. Your next adaptive session will adjust from what you just learned.</p><div class="actions">${restart}<a class="button" id="complete-back" href="${courseLink(currentCourse)}">Back to course</a></div></section>`);
+  study = null;
+  document.querySelector('#complete-back').addEventListener('click', event => { event.preventDefault(); courseView(currentCourse.id); });
+  document.querySelector('#restart-same')?.addEventListener('click', async event => {
+    const button = event.currentTarget;
+    button.disabled = true;
+    button.textContent = 'Starting…';
+    try {
+      const result = await api(`/courses/${currentCourse.id}/sessions`, {method:'POST', body:JSON.stringify({mode:finishedStudy.mode,limit:finishedStudy.cards.length,card_ids:finishedStudy.cards.map(card => card.id)})});
+      initializeStudy(result);
+      await preloadPortrait(currentCard());
+      studyView();
+    } catch (error) {
+      button.disabled = false;
+      button.textContent = error.message;
+    }
+  });
+}
+
+document.addEventListener('keydown', event => { if (!study || scoring || ['INPUT','SELECT','TEXTAREA'].includes(document.activeElement.tagName)) return; if ((event.key === ' ' || event.key === 'Enter') && !study.revealed) { event.preventDefault(); study.revealed = true; studyView(); } if (event.key.toLowerCase() === 'r') score('right'); if (study.revealed && event.key.toLowerCase() === 'w') score('wrong'); if (event.key === 'Escape') completeStudy(); });
 window.addEventListener('hashchange', route);
 async function route() {
   const match = location.hash.match(/^#\/course\/([^/]+)(?:\/(review|add))?$/);
