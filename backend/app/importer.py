@@ -16,7 +16,7 @@ from .database import app_data_dir
 
 NAME_PATTERNS = (
     re.compile(r"^\s*([A-Z][A-Za-z'\-]+),\s*([A-Z][A-Za-z'\-]+)\s*$"),
-    re.compile(r"^\s*(?:Name\s*:\s*)?([A-Z][A-Za-z'\-]+)\s+([A-Z][A-Za-z'\-]+)\s*$"),
+    re.compile(r"^\s*(?:Name\s*:\s*)?([A-Z][A-Za-z'\-]+)\s+([A-Za-z][A-Za-z'\-]*(?:\s+[A-Za-z][A-Za-z'\-]*){0,2})\s*$"),
 )
 
 
@@ -52,6 +52,10 @@ def _candidates(text: str) -> list[tuple[str, str]]:
             if not match:
                 continue
             first, last = (match.group(2), match.group(1)) if pattern_index == 0 else match.groups()
+            # Ignore all-caps headings such as the course code while retaining
+            # multi-part names like "Daniel Ambrosio Palma" and "Ben de Hoyos".
+            if not any(character.islower() for character in f"{first}{last}"):
+                continue
             key = (first, last)
             if key not in seen:
                 candidates.append(key)
@@ -81,6 +85,21 @@ def _positioned_candidates(image: Image.Image) -> list[tuple[str, str, int]]:
         if name:
             result.append((*name[0], sum(top for _, top in words) // len(words)))
     return result
+
+
+def _row_fallback_candidates(image: Image.Image) -> list[tuple[str, str, int]]:
+    """Read individual name cells when page-layout OCR misses a roster row."""
+    right_column = image.crop((int(image.width * 0.50), 0, image.width, image.height))
+    candidates = []
+    # The supported roster template has three equally spaced name cells. Cropping
+    # each one prevents one weak cell from affecting OCR of the entire page.
+    for fraction in (0.216, 0.435, 0.655):
+        center = int(image.height * fraction)
+        cell = right_column.crop((0, center - int(image.height * 0.09), right_column.width, center + int(image.height * 0.09)))
+        names = _candidates(pytesseract.image_to_string(cell, config="--psm 7"))
+        if names:
+            candidates.append((*names[0], center))
+    return candidates
 
 
 def _save_portrait(image: Image.Image, course_id: str, page_number: int, ordinal: int, name_y: int) -> str:
@@ -123,7 +142,10 @@ def _ocr_pdf(path: Path, course_id: str) -> tuple[str, int, list[dict]]:
                 right_column = image.crop((int(image.width * 0.45), 0, image.width, image.height))
                 page_text.append(pytesseract.image_to_string(image, config="--psm 6"))
                 page_text.append(pytesseract.image_to_string(right_column, config="--psm 4"))
-                for ordinal, (first_name, last_name, name_y) in enumerate(_positioned_candidates(image), start=1):
+                detected = _positioned_candidates(image)
+                if len(detected) < 3:
+                    detected.extend(_row_fallback_candidates(image))
+                for ordinal, (first_name, last_name, name_y) in enumerate(detected, start=1):
                     key = (first_name, last_name)
                     if key in seen:
                         continue

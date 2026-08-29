@@ -83,7 +83,7 @@ def courses():
     with connection() as conn:
         rows = conn.execute(
             """
-            SELECT c.*, COUNT(cards.id) AS card_count,
+            SELECT c.*, COUNT(DISTINCT cards.id) AS card_count,
                    MAX(s.ended_at) AS last_studied_at
             FROM courses c
             LEFT JOIN cards ON cards.course_id = c.id AND cards.reviewed = 1

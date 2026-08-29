@@ -190,6 +190,9 @@ Inspect both supplied PDFs, identify their extractable card fields and images, t
 ## Future features
 * Allowing for a batched learning mode where you start with a subset of the cards and can go through it multiple times. This works well for large classes.
 * Allow marking right without having to flip. 
-* view statistics
+* view statistics in useful, fun, interesting ways. Graph success rates?
 * BYU specific
 * Add my personal logo?
+* A way to remove people that drop the class later
+* better ui when flipping so doesn't jump around. Simpler interfacing.
+
