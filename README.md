@@ -112,3 +112,7 @@ The application stores courses, cards, progress, sessions, and review events in 
 - The BYU 3-students-per-page export is the supported layout; PDF formats vary and may need importer work.
 - There is not yet a database backup/export command.
 - The study model is a small, inspectable heuristic, not an implementation of Anki or a validated memory model.
+
+## Affiliation
+
+Familiar is an independent project and is not affiliated with, endorsed by, or maintained by Brigham Young University or BYU Flashcards.
