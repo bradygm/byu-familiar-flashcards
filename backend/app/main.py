@@ -3,7 +3,7 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -20,6 +20,14 @@ ASSETS.mkdir(parents=True, exist_ok=True)
 app = FastAPI(title="Local Flashcards")
 app.mount("/static", StaticFiles(directory=FRONTEND), name="static")
 app.mount("/assets", StaticFiles(directory=ASSETS), name="assets")
+
+
+@app.middleware("http")
+async def disable_frontend_cache(request: Request, call_next):
+    response = await call_next(request)
+    if request.url.path == "/" or request.url.path.startswith("/static/"):
+        response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 class ImportRequest(BaseModel):
@@ -218,12 +226,18 @@ def start_session(course_id: str, request: StartSessionRequest):
             selected = cards_to_choose
         else:
             selected = adaptive_cards(cards_to_choose, request.limit)
+        filler_cards = []
+        if request.mode == "morris":
+            selected_ids = {card["id"] for card in selected}
+            filler_cards = [card for card in cards_to_choose if card["id"] not in selected_ids]
+            import random
+            random.shuffle(filler_cards)
         session_id = uuid.uuid4().hex
         conn.execute(
             "INSERT INTO study_sessions (id, course_id, mode, started_at, selected_count) VALUES (?, ?, ?, ?, ?)",
             (session_id, course_id, request.mode, now(), len(selected)),
         )
-        return {"id": session_id, "mode": request.mode, "cards": selected}
+        return {"id": session_id, "mode": request.mode, "cards": selected, "filler_cards": filler_cards}
 
 
 @app.post("/api/sessions/{session_id}/reviews")

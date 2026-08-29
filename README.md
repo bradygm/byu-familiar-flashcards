@@ -13,7 +13,7 @@ _A screenshot using fictional/demo roster data will be added here before the fir
 ## Quick start
 
 1. Install and start [Docker Desktop](https://www.docker.com/products/docker-desktop/).
-2. Export a course roster PDF from BYU Flashcards (instructions below) and put it in `data/`.
+2. Export a course roster PDF (3 students per page) from BYU Flashcards (instructions below) and put it in `data/`.
 3. Start the app from this directory:
 
    ```bash
@@ -44,10 +44,10 @@ All modes are intentionally **no-deadline**: every approved card remains availab
 | Mode | What it does | Best for |
 | --- | --- | --- |
 | **Adaptive review** | Selects a varied set with an emphasis on people with low predicted recall, newly imported people, and uncertain estimates. | A quick, helpful session when you do not want to decide what to study. |
-| **Expanding recall** | Starts with an adaptively chosen base set (up to 15 people), then brings a correctly recalled person back after increasingly large within-session gaps. A miss returns sooner. The session is capped. | Rapidly learning a smaller group at the beginning of a semester. |
+| **Expanding recall** | Starts with an adaptively chosen base set (up to 15 people), then brings a correctly recalled person back after increasingly large within-session gaps. Other course cards are interleaved when needed to preserve those gaps. A miss returns sooner. The session is capped. | Rapidly learning a smaller group at the beginning of a semester. |
 | **All cards** | Shows every approved person once in a fresh random order. | A broad check-in or a refresher later in the semester. |
 
-Expanding recall is inspired by retrieval-practice research rather than an attempt to reproduce a commercial spaced-repetition scheduler. In a study of face-name learning, Morris and colleagues found substantially better later name recall from retrieval practice on an expanding schedule than from restudying on the same schedule: [Morris et al., 2005, *Strategies for learning proper names: expanding retrieval practice, meaning and imagery*](https://doi.org/10.1002/acp.1115). Familiar uses that idea inside one finite session: after a correct answer, it schedules another attempt after 3, then 7 intervening reviews; after the third correct answer, the card leaves that session. A wrong answer returns after 2 intervening reviews.
+Expanding recall is inspired by retrieval-practice research rather than an attempt to reproduce a commercial spaced-repetition scheduler. In a study of face-name learning, Morris and colleagues found substantially better later name recall from retrieval practice on an expanding schedule than from restudying on the same schedule: [Morris et al., 2005, *Strategies for learning proper names: expanding retrieval practice, meaning and imagery*](https://doi.org/10.1002/acp.1115). Familiar uses that idea inside one finite session: after a correct answer, it schedules another attempt after 3, then 7 intervening reviews; after the third correct answer, the card leaves that session. A wrong answer returns after 2 intervening reviews. If no base card is due, Familiar shows an interleaved course card instead of breaking that gap.
 
 The paper supports the use of repeated retrieval for learning names; it does **not** validate Familiar's particular gap sizes, cap, or scoring coefficients. Those are deliberately simple product choices that can be revised with real usage data.
 

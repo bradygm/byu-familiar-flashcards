@@ -30,7 +30,7 @@ async function home() {
   setView(document.querySelector('#loading').innerHTML);
   const [courses, pdfs] = await Promise.all([api('/courses'), api('/imports/available')]);
   setView(`
-    <section class="hero"><div class="eyebrow">For instructors and teaching teams</div><h1>Know every student<br>before the first day.</h1><p>Import a BYU Flashcards roster, confirm the people it finds, and build familiarity in short, adaptive sessions.</p></section>
+    <section class="hero"><div class="eyebrow">For BYU instructors</div><h1>Know every student<br>before the first day.</h1><p>Import a BYU Flashcards roster, confirm the people it finds, and build familiarity in short, adaptive sessions.</p></section>
     <section class="section-head"><div><div class="eyebrow">Courses</div><h1>Your courses</h1></div><p>${courses.length ? `${courses.length} imported` : 'Nothing imported yet'}</p></section>
     ${courses.length ? `<div class="course-grid">${courses.map(course => { const accuracy = course.review_count ? Math.round(course.right_count / course.review_count * 100) : null; return `<a class="course" href="${courseLink(course)}"><div class="course-top"><span class="course-kicker">Course roster</span><span class="course-state">${studiedLabel(course.last_studied_at)}</span></div><h2>${esc(course.title)}</h2><dl class="course-metrics"><div><dt>People</dt><dd>${course.card_count}</dd></div><div><dt>Recall</dt><dd>${accuracy === null ? '—' : `${accuracy}%`}</dd></div><div><dt>Sessions</dt><dd>${course.session_count}</dd></div></dl><p class="course-cta">${course.last_studied_at ? 'Continue studying' : 'Start learning'} <span aria-hidden="true">→</span></p></a>`; }).join('')}</div>` : `<div class="empty"><h2>Your first course starts with a PDF.</h2><p>Source files remain on this machine. Imported information is saved in the local app database.</p></div>`}
     <section class="importer" style="margin-top:28px"><div class="eyebrow">Local import</div><h2>Import from <code>data/</code></h2><p class="fine">The importer extracts only high-confidence name lines first. You approve its candidates before they are included in study sessions.</p><div class="import-list">${pdfs.length ? pdfs.map(pdf => `<button class="chip" data-import="${esc(pdf.filename)}">Import ${esc(pdf.filename)}</button>`).join('') : '<span class="fine">No PDFs found in the mounted data directory.</span>'}</div><div id="import-message"></div></section>`);
@@ -67,17 +67,19 @@ function manualCardView(course) {
 
 function setupView(course, count) {
   let mode = 'adaptive';
-  setView(`<a class="back" href="${courseLink(course)}" id="setup-back">← ${esc(course.title)}</a><section class="setup"><div class="eyebrow">Study setup</div><h1>What feels useful today?</h1><p class="fine">Every card is available whenever you are. Adaptive review simply makes a varied, helpful choice.</p><div class="mode-grid"><button class="mode selected" data-mode="adaptive"><h2>Adaptive review</h2><p>Prioritizes people with the lowest predicted recall.</p></button><button class="mode" data-mode="morris"><h2>Expanding recall</h2><p>Repeats a focused base set inside one capped session with widening gaps.</p></button><button class="mode" data-mode="all"><h2>All cards</h2><p>See every approved person once, in a fresh random order.</p></button></div><label class="range" id="base-size">${mode === 'morris' ? 'Base people' : 'Adaptive session length'}: <strong id="length-label">15</strong><input id="length" type="range" min="5" max="${Math.max(5, Math.min(50, count))}" value="${Math.min(15,count)}"></label><div class="actions"><button class="button" id="begin">Begin studying</button></div><div id="setup-notice"></div></section>`);
+  let adaptiveLength = Math.min(15, count);
+  let morrisLength = Math.min(7, count);
+  setView(`<a class="back" href="${courseLink(course)}" id="setup-back">← ${esc(course.title)}</a><section class="setup"><div class="eyebrow">Study setup</div><h1>What feels useful today?</h1><p class="fine">Every card is available whenever you are. Adaptive review simply makes a varied, helpful choice.</p><div class="mode-grid"><button class="mode selected" data-mode="adaptive"><h2>Adaptive review</h2><p>Prioritizes people with the lowest predicted recall.</p></button><button class="mode" data-mode="morris"><h2>Expanding recall</h2><p>Repeats a focused base set inside one capped session with widening gaps.</p></button><button class="mode" data-mode="all"><h2>All cards</h2><p>See every approved person once, in a fresh random order.</p></button></div><label class="range" id="base-size">Adaptive session length: <strong id="length-label">${adaptiveLength}</strong><input id="length" type="range" min="5" max="${Math.max(5, Math.min(50, count))}" value="${adaptiveLength}"></label><div class="actions"><button class="button" id="begin">Begin studying</button></div><div id="setup-notice"></div></section>`);
   document.querySelector('#setup-back').addEventListener('click', event => { event.preventDefault(); courseView(course.id); });
-  document.querySelectorAll('[data-mode]').forEach(button => button.addEventListener('click', () => { mode = button.dataset.mode; document.querySelectorAll('[data-mode]').forEach(item => item.classList.toggle('selected', item === button)); document.querySelector('.range').classList.toggle('hidden', mode === 'all'); document.querySelector('#base-size').firstChild.textContent = mode === 'morris' ? 'Base people: ' : 'Adaptive session length: '; const input = document.querySelector('#length'); input.max = mode === 'morris' ? Math.max(5, Math.min(15, count)) : Math.max(5, Math.min(50, count)); if (+input.value > +input.max) { input.value = input.max; document.querySelector('#length-label').textContent = input.value; } }));
-  document.querySelector('#length').addEventListener('input', e => document.querySelector('#length-label').textContent = e.target.value);
+  document.querySelectorAll('[data-mode]').forEach(button => button.addEventListener('click', () => { mode = button.dataset.mode; document.querySelectorAll('[data-mode]').forEach(item => item.classList.toggle('selected', item === button)); document.querySelector('.range').classList.toggle('hidden', mode === 'all'); document.querySelector('#base-size').firstChild.textContent = mode === 'morris' ? 'Base people: ' : 'Adaptive session length: '; const input = document.querySelector('#length'); input.max = mode === 'morris' ? Math.max(5, Math.min(15, count)) : Math.max(5, Math.min(50, count)); input.value = mode === 'morris' ? Math.min(morrisLength, +input.max) : Math.min(adaptiveLength, +input.max); document.querySelector('#length-label').textContent = input.value; }));
+  document.querySelector('#length').addEventListener('input', event => { const length = +event.target.value; if (mode === 'morris') morrisLength = length; else adaptiveLength = length; document.querySelector('#length-label').textContent = length; });
   document.querySelector('#begin').addEventListener('click', async () => { try { const result = await api(`/courses/${course.id}/sessions`, {method:'POST', body:JSON.stringify({mode,limit:+document.querySelector('#length').value})}); initializeStudy(result); await preloadPortrait(currentCard()); studyView(); } catch(error) { document.querySelector('#setup-notice').innerHTML = notice(error.message); } });
 }
 
 function initializeStudy(result) {
   study = {...result, index:0, revealed:false};
   if (study.mode === 'morris') {
-    study = {...study, remaining:[...result.cards], pending:[], current:null, stages:{}, reviews:0, maxReviews:Math.min(60, Math.max(15, result.cards.length * 5))};
+    study = {...study, remaining:[...result.cards], pending:[], fillers:[...(result.filler_cards || [])], fillerIndex:0, current:null, currentIsFiller:false, stages:{}, reviews:0, maxReviews:Math.min(60, Math.max(20, result.cards.length * 7))};
     advanceMorris();
   }
 }
@@ -88,24 +90,47 @@ function currentCard() {
 
 function advanceMorris() {
   const due = study.pending.findIndex(item => item.readyAt <= study.reviews);
-  if (due >= 0) study.current = study.pending.splice(due, 1)[0].card;
-  else if (study.remaining.length) study.current = study.remaining.shift();
-  else if (study.pending.length) study.current = study.pending.sort((a, b) => a.readyAt - b.readyAt).shift().card;
-  else study.current = null;
+  if (due >= 0) {
+    study.current = study.pending.splice(due, 1)[0].card;
+    study.currentIsFiller = false;
+  } else if (study.remaining.length) {
+    study.current = study.remaining.shift();
+    study.currentIsFiller = false;
+  } else if (study.pending.length && study.fillers.length) {
+    study.current = study.fillers[study.fillerIndex % study.fillers.length];
+    study.fillerIndex += 1;
+    study.currentIsFiller = true;
+  } else {
+    study.current = null;
+  }
 }
 
 function studyView() {
   const card = currentCard();
   if (!card) return completeStudy();
   const complete = study.mode === 'morris' ? Math.round((study.reviews / study.maxReviews) * 100) : Math.round((study.index / study.cards.length) * 100);
-  const sessionTitle = study.mode === 'all' ? 'All cards' : study.mode === 'morris' ? 'Expanding recall' : 'Adaptive review';
+  const sessionTitle = study.mode === 'all' ? 'All cards' : study.mode === 'morris' ? (study.currentIsFiller ? 'Expanding recall · interleaved review' : 'Expanding recall') : 'Adaptive review';
   const position = study.mode === 'morris' ? `${study.reviews + 1} / up to ${study.maxReviews}` : `${study.index + 1} / ${study.cards.length}`;
-  setView(`<div class="study-wrap"><div class="session-meta"><span>${sessionTitle}</span><span>${position}</span></div><div class="study-card" id="flashcard" role="button" tabindex="0" aria-label="Flip card">${portrait(card)}<div class="study-copy">${study.revealed ? `<div class="answer"><div class="eyebrow">The answer</div><div class="name">${esc(card.first_name)} ${esc(card.last_name)}</div>${card.facts.length ? `<ul>${card.facts.map(fact=>`<li>${esc(fact)}</li>`).join('')}</ul>` : ''}</div>` : `<div><div class="eyebrow">Your turn</div><h1>Name this student.</h1><p>Flip when you have an answer in mind.</p></div>`}</div></div><div class="study-actions">${study.revealed ? `<button class="button danger" id="wrong">Wrong <span class="key">W</span></button><button class="button" id="right">Right <span class="key">R</span></button>` : `<button class="button secondary" id="flip">Flip card <span class="key">Space</span></button><button class="button" id="right">Right <span class="key">R</span></button>`}</div><div class="fine" style="margin-top:18px">${complete}% complete · <span class="key">Esc</span> to end session</div></div>`);
+  const morrisProgress = study.mode === 'morris' ? expandingProgress(card) : '';
+  setView(`<div class="study-wrap"><div class="session-meta"><span>${sessionTitle}</span><span>${position}</span></div>${morrisProgress}<div class="study-card" id="flashcard" role="button" tabindex="0" aria-label="Flip card">${portrait(card)}<div class="study-copy">${study.revealed ? `<div class="answer"><div class="eyebrow">The answer</div><div class="name">${esc(card.first_name)} ${esc(card.last_name)}</div>${card.facts.length ? `<ul>${card.facts.map(fact=>`<li>${esc(fact)}</li>`).join('')}</ul>` : ''}</div>` : `<div><div class="eyebrow">Your turn</div><h1>Name this student.</h1><p>Flip when you have an answer in mind.</p></div>`}</div></div><div class="study-actions">${study.revealed ? `<button class="button danger" id="wrong">Wrong <span class="key">W</span></button><button class="button" id="right">Right <span class="key">R</span></button>` : `<button class="button secondary" id="flip">Flip card <span class="key">Space</span></button><button class="button" id="right">Right <span class="key">R</span></button>`}</div><div class="fine" style="margin-top:18px">${complete}% complete · <span class="key">Esc</span> to end session</div></div>`);
   const reveal = () => { if (!study.revealed) { study.revealed = true; studyView(); } };
   document.querySelector('#flashcard').addEventListener('click', reveal); document.querySelector('#flashcard').addEventListener('keydown', event => { if(event.key === 'Enter' || event.key === ' ') { event.preventDefault(); reveal(); } });
   document.querySelector('#flip')?.addEventListener('click', reveal);
   document.querySelector('#right')?.addEventListener('click', () => score('right'));
   document.querySelector('#wrong')?.addEventListener('click', () => score('wrong'));
+}
+
+function expandingProgress(card) {
+  const totalSteps = study.cards.length * 3;
+  const earnedSteps = study.cards.reduce((total, item) => total + Math.min(3, study.stages[item.id] || 0), 0);
+  const mastered = study.cards.filter(item => (study.stages[item.id] || 0) >= 3).length;
+  const currentStage = study.stages[card.id] || 0;
+  const focus = study.currentIsFiller
+    ? 'Interleaved review gives your selected people time between recalls.'
+    : currentStage === 2
+      ? 'One more successful recall will master this student for this session.'
+      : `This student is on recall ${currentStage + 1} of 3.`;
+  return `<section class="morris-progress" aria-label="Expanding recall progress"><div><strong>${mastered} of ${study.cards.length} mastered</strong></div><div class="progress-track" role="progressbar" aria-label="Selected-card mastery progress" aria-valuemin="0" aria-valuemax="${totalSteps}" aria-valuenow="${earnedSteps}"><span style="width:${totalSteps ? Math.round(earnedSteps / totalSteps * 100) : 0}%"></span></div><p>${focus}</p></section>`;
 }
 
 async function score(result) {
@@ -116,9 +141,11 @@ async function score(result) {
     await api(`/sessions/${study.id}/reviews`, {method:'POST',body:JSON.stringify({card_id:card.id,result})});
     if (study.mode === 'morris') {
       study.reviews += 1;
-      const stage = result === 'right' ? (study.stages[card.id] || 0) + 1 : 0;
-      study.stages[card.id] = stage;
-      if (result === 'wrong' || stage < 3) study.pending.push({card, readyAt:study.reviews + (result === 'wrong' ? 2 : stage === 1 ? 3 : 7)});
+      if (!study.currentIsFiller) {
+        const stage = result === 'right' ? (study.stages[card.id] || 0) + 1 : 0;
+        study.stages[card.id] = stage;
+        if (result === 'wrong' || stage < 3) study.pending.push({card, readyAt:study.reviews + (result === 'wrong' ? 2 : stage === 1 ? 3 : 7)});
+      }
       if (study.reviews >= study.maxReviews) return completeStudy();
       advanceMorris();
     } else {
