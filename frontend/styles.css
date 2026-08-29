@@ -136,10 +136,10 @@ button { cursor: pointer; }
 .session-meta { display: flex; justify-content: space-between; color: var(--muted); font-size: .9rem; margin-bottom: 14px; }
 .study-card { min-height: 540px; padding: 52px 35px; display: flex; flex-direction: column; justify-content: center; align-items: center; background: var(--surface); border: 1px solid var(--line); border-radius: 25px; box-shadow: var(--shadow); cursor: pointer; }
 .study-card .avatar { width: min(330px, 88%); height: 280px; border-radius: 22px; font-size: 3.2rem; margin-bottom: 22px; }
-.study-card h1 { font-size: 3.3rem; }
+.study-card h1 { font: 650 2.15rem/1.08 var(--display); letter-spacing: -.045em; }
 .study-card p { color: var(--muted); max-width: 420px; }
 .answer { animation: reveal .2s ease; }
-.answer .name { color: var(--navy); font: 800 2.55rem/1.1 var(--display); letter-spacing: -.055em; margin: 8px 0; }
+.answer .name { color: var(--navy); font: 650 2.35rem/1.12 var(--display); letter-spacing: -.045em; margin: 8px 0; }
 .answer ul { list-style: none; padding: 0; color: var(--muted); }
 @keyframes reveal { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 .key { border: 1px solid #c8d6e2; border-bottom-width: 3px; border-radius: 5px; padding: 1px 5px; font-size: .75rem; color: var(--muted); background: #fff; }
@@ -160,7 +160,7 @@ button { cursor: pointer; }
   .person .avatar { height: 200px; }
   .study-card { min-height: 460px; padding: 34px 20px; }
   .study-card .avatar { height: 235px; }
-  .study-card h1 { font-size: 2.6rem; }
+  .study-card h1 { font-size: 2rem; }
   .study-actions { flex-wrap: wrap; }
   .toolbar { align-items: stretch; flex-direction: column; }
 }
