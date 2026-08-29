@@ -83,11 +83,13 @@ def courses():
     with connection() as conn:
         rows = conn.execute(
             """
-            SELECT c.*, COUNT(DISTINCT cards.id) AS card_count,
-                   MAX(s.ended_at) AS last_studied_at
+            SELECT c.*, COUNT(cards.id) AS card_count,
+                   (SELECT MAX(s.ended_at) FROM study_sessions s WHERE s.course_id = c.id) AS last_studied_at,
+                   (SELECT COUNT(*) FROM study_sessions s WHERE s.course_id = c.id) AS session_count,
+                   (SELECT COUNT(*) FROM review_events r JOIN study_sessions s ON s.id = r.session_id WHERE s.course_id = c.id) AS review_count,
+                   (SELECT COUNT(*) FROM review_events r JOIN study_sessions s ON s.id = r.session_id WHERE s.course_id = c.id AND r.result = 'right') AS right_count
             FROM courses c
             LEFT JOIN cards ON cards.course_id = c.id AND cards.reviewed = 1
-            LEFT JOIN study_sessions s ON s.course_id = c.id
             WHERE c.active = 1
             GROUP BY c.id
             ORDER BY c.imported_at DESC
