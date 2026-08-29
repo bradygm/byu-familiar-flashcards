@@ -1,10 +1,10 @@
 # Familiar
 
-**Familiar** is a local, Docker-first flashcard app for learning the people in a course. It imports the PDF roster exported by [BYU Flashcards](https://flashcards.byu.edu), extracts the names and portraits, and keeps each course's cards and study history on your machine.
+**Familiar** is a local, Docker-first course-roster learning tool built around better learning strategies—not just a traditional stack of flashcards. It imports the PDF roster exported by [BYU Flashcards](https://flashcards.byu.edu), extracts the names and portraits, and keeps each course's cards and study history on your machine.
 
-It was built for the part of a semester that conventional flashcard apps do not handle especially well: quickly learning the names and faces of everyone in a room, then coming back for a low-friction refresher later. There are no forced due dates. You choose a course, start a useful session, and the app decides what deserves attention.
+Familiar was built to bring science-backed retrieval practice and expanding recall to the part of a semester that conventional flashcard apps do not handle especially well: quickly learning the names and faces of everyone in a room, then coming back for a low-friction refresher later. There are no forced due dates. You choose a course, start a useful session, and the app decides what deserves attention.
 
-> **Privacy note:** roster PDFs and study history are local. `data/` and `app-data/` are ignored by Git. Do not commit or publish real roster PDFs, portraits, or the local SQLite database.
+> **Privacy note:** roster PDFs and study history are local. Familiar does not use browser storage or a remote database; cards, sessions, and progress live in the local SQLite database at `app-data/flashcards.sqlite3`. `data/` and `app-data/` are ignored by Git. Do not commit or publish real roster PDFs, portraits, or the local database.
 
 ## Screenshot
 
