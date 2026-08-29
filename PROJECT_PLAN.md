@@ -189,16 +189,10 @@ flashcards/
 Inspect both supplied PDFs, identify their extractable card fields and images, then prototype the importer against a small reviewed subset from each course. That will validate the local data model before the interface is built around it.
 
 ## Future features
-* When doing a mode that does show all people (adaptive mode), when get to end allow starting over with same set of names.
-* Allow marking right without having to flip. 
-* view statistics in useful, fun, interesting ways. Graph success rates?
 * BYU specific
 * Add my personal logo?
 * A way to remove people that drop the class later
-* better ui when flipping so doesn't jump around. Simpler interfacing.
-* Remove "no additional info"
-* Picture flashes on change
-* Explain the math in the readme (mathlatex)
-* Explain the modes in the readme (cite the paper we used to backup the method)
-* add to github, description, repo title good. Explain intergration with byu flashcards exporter. 
-* color pallete -> byu but look really nice. the green and orange was good
+* Add screenshot
+* make version that hosted on my website and usable by others? Upload only, etc?
+
+
