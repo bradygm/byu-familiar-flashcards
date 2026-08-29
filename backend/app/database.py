@@ -1,0 +1,97 @@
+import os
+import sqlite3
+from contextlib import contextmanager
+from pathlib import Path
+
+
+def app_data_dir() -> Path:
+    path = Path(os.environ.get("FLASHCARDS_APP_DATA_DIR", "app-data"))
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def database_path() -> Path:
+    return app_data_dir() / "flashcards.sqlite3"
+
+
+@contextmanager
+def connection():
+    conn = sqlite3.connect(database_path())
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON")
+    try:
+        yield conn
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def initialize_database() -> None:
+    with connection() as conn:
+        conn.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS courses (
+              id TEXT PRIMARY KEY,
+              title TEXT NOT NULL,
+              source_filename TEXT NOT NULL,
+              source_checksum TEXT NOT NULL UNIQUE,
+              imported_at TEXT NOT NULL,
+              active INTEGER NOT NULL DEFAULT 1
+            );
+
+            CREATE TABLE IF NOT EXISTS import_runs (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              source_filename TEXT NOT NULL,
+              source_checksum TEXT NOT NULL,
+              started_at TEXT NOT NULL,
+              finished_at TEXT,
+              status TEXT NOT NULL,
+              pages INTEGER,
+              extracted_text_length INTEGER,
+              candidate_count INTEGER NOT NULL DEFAULT 0,
+              warning TEXT
+            );
+
+            CREATE TABLE IF NOT EXISTS cards (
+              id TEXT PRIMARY KEY,
+              course_id TEXT NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+              first_name TEXT NOT NULL,
+              last_name TEXT NOT NULL,
+              facts TEXT NOT NULL DEFAULT '',
+              prompt_text TEXT NOT NULL DEFAULT '',
+              image_path TEXT,
+              reviewed INTEGER NOT NULL DEFAULT 0,
+              created_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS card_progress (
+              card_id TEXT PRIMARY KEY REFERENCES cards(id) ON DELETE CASCADE,
+              seen_count INTEGER NOT NULL DEFAULT 0,
+              right_count INTEGER NOT NULL DEFAULT 0,
+              wrong_count INTEGER NOT NULL DEFAULT 0,
+              confidence REAL NOT NULL DEFAULT 0,
+              last_reviewed_at TEXT,
+              last_result TEXT
+            );
+
+            CREATE TABLE IF NOT EXISTS study_sessions (
+              id TEXT PRIMARY KEY,
+              course_id TEXT NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+              mode TEXT NOT NULL,
+              started_at TEXT NOT NULL,
+              ended_at TEXT,
+              selected_count INTEGER NOT NULL,
+              reviewed_count INTEGER NOT NULL DEFAULT 0,
+              right_count INTEGER NOT NULL DEFAULT 0,
+              wrong_count INTEGER NOT NULL DEFAULT 0
+            );
+
+            CREATE TABLE IF NOT EXISTS review_events (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              session_id TEXT NOT NULL REFERENCES study_sessions(id) ON DELETE CASCADE,
+              card_id TEXT NOT NULL REFERENCES cards(id) ON DELETE CASCADE,
+              reviewed_at TEXT NOT NULL,
+              result TEXT NOT NULL CHECK(result IN ('right', 'wrong'))
+            );
+            """
+        )
