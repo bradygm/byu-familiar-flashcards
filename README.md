@@ -61,7 +61,7 @@ Each card stores two local estimates:
 If \(d\) days have passed since the last review, Familiar estimates current recall probability as:
 
 $$
-\hat p = \operatorname{clamp}_{0.01}^{0.99}\!\left(M e^{-d / \max(S, 0.02)}\right).
+\hat p = \mathrm{clamp}_{0.01}^{0.99}\!\left(M e^{-d / \max(S, 0.02)}\right).
 $$
 
 This is a transparent heuristic, not a scientifically calibrated model of an individual learner. It prevents two unwanted behaviors: treating a card as permanently learned after one success, and hiding a card because it has no arbitrary “due” date.
