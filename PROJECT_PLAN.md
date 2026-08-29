@@ -77,7 +77,7 @@ Start with these tables:
 | `courses` | Stable ID, title, source filename, imported time, source checksum, active status. |
 | `cards` | Stable ID, course ID, first name, last name, prompt type/content, answer/facts, image path, review status. |
 | `import_runs` | Source file, checksum, started/finished time, extraction warnings, counts, and parser version. |
-| `card_progress` | Card ID, seen/right/wrong counts, confidence score, last reviewed timestamp, last result. |
+| `card_progress` | Card ID, seen/right/wrong counts, mastery (recent recall evidence), stability in days, last reviewed timestamp, last result. |
 | `study_sessions` | ID, course ID, mode, start/end times, selected/reviewed/right/wrong counts. |
 | `review_events` | Session ID, card ID, timestamp, result, and optional elapsed time. |
 
@@ -90,14 +90,14 @@ The learner selects a course and either `All cards` or `Adaptive review`. They m
 For adaptive review, choose a varied session based on these priorities:
 
 1. Give unseen cards high priority, particularly early in a course.
-2. Revisit recently missed or low-confidence cards, but do not repeat one immediately unless the learner asks for a drill.
-3. Mix in a smaller number of well-known cards so names remain familiar and confidence estimates are refreshed.
+2. Revisit recently missed or low-predicted-recall cards, but do not repeat one immediately unless the learner asks for a drill.
+3. Mix in a smaller number of well-known cards so names remain familiar and mastery estimates are refreshed.
 4. Use time since last review as a gentle weighting signal, never a deadline or eligibility rule.
 5. Randomize within comparable scores to avoid a predictable order.
 
-Each card has a confidence score updated after every answer. A right answer raises it; a wrong answer lowers it more strongly. Weight results by recency so a recent answer matters more than an old one. The scheduler should target a practical blend (for example, mostly unfamiliar/weak cards plus some familiar cards) and have an optional session length. Its constants belong in one tested module so the behavior can be tuned from real use.
+Each card tracks two model values: `mastery` (recent recall evidence) and `stabilityDays` (how quickly recall decays). Predicted recall falls smoothly with time since review; it ranks the adaptive session but never makes a card unavailable. A right answer increases both values, while a wrong answer decreases both more sharply. The scheduler targets a practical blend of unfamiliar/weak people and familiar people, with a configurable session length.
 
-`All cards` includes every active card once in a randomized order and still updates confidence and statistics. A future `Refresh` mode can deliberately emphasize cards not seen for a long time without describing them as overdue.
+`All cards` includes every active card once in a randomized order and still updates mastery/stability and statistics. `Expanding recall` selects a mastery/stability-biased base set, then uses in-session expanding retrieval gaps (3 then 7 cards after correct recalls; 2 after a miss), capped at four attempts per base card and 60 attempts total. A future `Refresh` mode can deliberately emphasize cards not seen for a long time without describing them as overdue.
 
 ## Scope boundaries for v1
 
@@ -134,6 +134,7 @@ Defer:
 - [x] Add SQLite persistence, statistics, and session history.
 - [ ] Add course-progress reset and database backup/export.
 - [x] Implement the adaptive-session selector with module-level checks.
+- [x] Replace the fixed confidence score with a mastery/stability recall model and add a capped expanding-retrieval session mode.
 - [ ] Add responsive/accessibility QA, empty states, error handling, and sample-data safeguards.
 - [x] Write the local run and course-importing guide.
 - [ ] Write the local backup guide.
@@ -188,11 +189,16 @@ flashcards/
 Inspect both supplied PDFs, identify their extractable card fields and images, then prototype the importer against a small reviewed subset from each course. That will validate the local data model before the interface is built around it.
 
 ## Future features
-* Allowing for a batched learning mode where you start with a subset of the cards and can go through it multiple times. This works well for large classes.
+* When doing a mode that does show all people (adaptive mode), when get to end allow starting over with same set of names.
 * Allow marking right without having to flip. 
 * view statistics in useful, fun, interesting ways. Graph success rates?
 * BYU specific
 * Add my personal logo?
 * A way to remove people that drop the class later
 * better ui when flipping so doesn't jump around. Simpler interfacing.
-
+* Remove "no additional info"
+* Picture flashes on change
+* Explain the math in the readme (mathlatex)
+* Explain the modes in the readme (cite the paper we used to backup the method)
+* add to github, description, repo title good. Explain intergration with byu flashcards exporter. 
+* color pallete -> byu but look really nice. the green and orange was good

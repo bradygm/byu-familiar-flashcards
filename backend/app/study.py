@@ -1,38 +1,37 @@
+import math
 import random
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 
-def _hours_since(timestamp: Optional[str], now: datetime) -> float:
+def _days_since(timestamp: Optional[str], now: datetime) -> float:
     if not timestamp:
-        return 10_000.0
+        return 365.0
     reviewed = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
-    return max(0.0, (now - reviewed).total_seconds() / 3600)
+    return max(0.0, (now - reviewed).total_seconds() / 86_400)
+
+
+def predicted_recall(mastery: float, stability_days: float, days_since_review: float) -> float:
+    return max(0.01, min(0.99, mastery * math.exp(-days_since_review / max(stability_days, 0.02))))
 
 
 def adaptive_cards(cards: List[dict], limit: int, now: Optional[datetime] = None) -> List[dict]:
-    """Return a varied, no-deadline selection. Low confidence and new cards win.
-
-    Time since review is a gentle boost only: every card remains eligible at all times.
-    """
+    """Select a useful mix; cards are never excluded for being not due."""
     now = now or datetime.now(timezone.utc)
     if len(cards) <= limit:
-        shuffled = cards[:]
-        random.shuffle(shuffled)
-        return shuffled
+        selected = cards[:]
+        random.shuffle(selected)
+        return selected
 
     scored = []
     for card in cards:
         seen = card["seen_count"]
-        confidence = card["confidence"]
-        age_boost = min(0.9, _hours_since(card["last_reviewed_at"], now) / (24 * 30))
-        new_boost = 3.5 if seen == 0 else 0
-        wrong_rate = card["wrong_count"] / seen if seen else 0
-        score = new_boost + (2.5 - confidence) + (wrong_rate * 2) + age_boost + random.random() * 0.35
+        recall = predicted_recall(card["mastery"], card["stability_days"], _days_since(card["last_reviewed_at"], now))
+        uncertainty = 1 / math.sqrt(seen + 1)
+        score = (2.2 if seen == 0 else 0) + 3.0 * (1 - recall) + 0.55 * uncertainty + random.random() * 0.25
         scored.append((score, card))
 
     scored.sort(key=lambda item: item[0], reverse=True)
-    # Preserve a small familiar-card slice so the learner is not only drilled on misses.
     weak_count = max(1, round(limit * 0.8))
     selected = [card for _, card in scored[:weak_count]]
     remainder = [card for _, card in scored[weak_count:]]
@@ -42,7 +41,15 @@ def adaptive_cards(cards: List[dict], limit: int, now: Optional[datetime] = None
     return selected
 
 
-def update_confidence(current: float, result: str) -> float:
+def update_memory_state(progress: dict, result: str, reviewed_at: datetime) -> Dict[str, float]:
+    """Update persistent mastery and stability after an attempted retrieval."""
+    mastery = float(progress["mastery"])
+    stability = max(0.02, float(progress["stability_days"]))
+    recall = predicted_recall(mastery, stability, _days_since(progress["last_reviewed_at"], reviewed_at))
     if result == "right":
-        return min(3.0, current + 0.42)
-    return max(-3.0, current - 0.85)
+        next_mastery = min(0.98, mastery + (1 - mastery) * (0.22 + 0.18 * (1 - recall)))
+        next_stability = min(120.0, stability * (1.45 + 0.7 * (1 - recall)) + 0.03)
+    else:
+        next_mastery = max(0.05, mastery * 0.55)
+        next_stability = max(0.02, stability * 0.42)
+    return {"mastery": next_mastery, "stability_days": next_stability}

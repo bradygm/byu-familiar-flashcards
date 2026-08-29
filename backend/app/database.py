@@ -95,3 +95,18 @@ def initialize_database() -> None:
             );
             """
         )
+        columns = {row["name"] for row in conn.execute("PRAGMA table_info(card_progress)")}
+        if "mastery" not in columns:
+            conn.execute("ALTER TABLE card_progress ADD COLUMN mastery REAL NOT NULL DEFAULT 0.5")
+            conn.execute("ALTER TABLE card_progress ADD COLUMN stability_days REAL NOT NULL DEFAULT 0.25")
+            conn.execute(
+                """
+                UPDATE card_progress
+                SET mastery = (right_count + 2.0) / (seen_count + 4.0),
+                    stability_days = CASE
+                      WHEN seen_count = 0 THEN 0.04
+                      WHEN right_count > wrong_count THEN 1.0
+                      ELSE 0.18
+                    END
+                """
+            )

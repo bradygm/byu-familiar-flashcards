@@ -29,6 +29,7 @@ The importer records the source-file checksum and will not duplicate an unchange
 - Candidate approval plus manual card entry
 - Searchable roster with first/last-name sorting
 - All-cards and no-deadline adaptive study sessions
+- Mastery/stability-based adaptive selection and a capped expanding-recall session mode
 - Keyboard controls: `Space` / `Enter` flip, `R` right, `W` wrong, `Esc` finish
 - Per-course session, answer, accuracy, and miss statistics
 

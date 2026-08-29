@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 
 from .database import app_data_dir, connection, initialize_database
 from .importer import available_pdfs, import_pdf
-from .study import adaptive_cards, update_confidence
+from .study import adaptive_cards, update_memory_state
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -107,12 +107,17 @@ def course(course_id: str):
 
 @app.get("/api/courses/{course_id}/cards")
 def cards(course_id: str, sort: str = "last"):
-    column = "last_name, first_name" if sort == "last" else "first_name, last_name"
+    sort_columns = {
+        "first": "cards.first_name, cards.last_name",
+        "last": "cards.last_name, cards.first_name",
+        "confidence": "progress.mastery ASC, progress.seen_count ASC, cards.last_name, cards.first_name",
+    }
+    column = sort_columns.get(sort, sort_columns["first"])
     with connection() as conn:
         rows = conn.execute(
             f"""
             SELECT cards.*, progress.seen_count, progress.right_count, progress.wrong_count,
-                   progress.confidence, progress.last_reviewed_at
+                   progress.mastery, progress.stability_days, progress.last_reviewed_at
             FROM cards JOIN card_progress progress ON progress.card_id = cards.id
             WHERE cards.course_id = ? AND cards.reviewed = 1
             ORDER BY {column}
@@ -180,13 +185,13 @@ def approve_candidate(course_id: str, card_id: str):
 
 @app.post("/api/courses/{course_id}/sessions")
 def start_session(course_id: str, request: StartSessionRequest):
-    if request.mode not in {"all", "adaptive"}:
-        raise HTTPException(status_code=400, detail="Mode must be all or adaptive")
+    if request.mode not in {"all", "adaptive", "morris"}:
+        raise HTTPException(status_code=400, detail="Mode must be all, adaptive, or morris")
     with connection() as conn:
         rows = conn.execute(
             """
             SELECT cards.*, progress.seen_count, progress.right_count, progress.wrong_count,
-                   progress.confidence, progress.last_reviewed_at
+                   progress.mastery, progress.stability_days, progress.last_reviewed_at
             FROM cards JOIN card_progress progress ON progress.card_id = cards.id
             WHERE cards.course_id = ? AND cards.reviewed = 1
             """,
@@ -226,14 +231,15 @@ def review(session_id: str, request: ReviewRequest):
         reviewed_at = now()
         right_increment = 1 if request.result == "right" else 0
         wrong_increment = 1 if request.result == "wrong" else 0
+        updated_memory = update_memory_state(dict(card), request.result, datetime.fromisoformat(reviewed_at))
         conn.execute(
             """
             UPDATE card_progress
             SET seen_count = seen_count + 1, right_count = right_count + ?, wrong_count = wrong_count + ?,
-                confidence = ?, last_reviewed_at = ?, last_result = ?
+                confidence = ?, mastery = ?, stability_days = ?, last_reviewed_at = ?, last_result = ?
             WHERE card_id = ?
             """,
-            (right_increment, wrong_increment, update_confidence(card["confidence"], request.result), reviewed_at, request.result, request.card_id),
+            (right_increment, wrong_increment, updated_memory["mastery"], updated_memory["mastery"], updated_memory["stability_days"], reviewed_at, request.result, request.card_id),
         )
         conn.execute(
             "INSERT INTO review_events (session_id, card_id, reviewed_at, result) VALUES (?, ?, ?, ?)",
