@@ -15,6 +15,19 @@ def predicted_recall(mastery: float, stability_days: float, days_since_review: f
     return max(0.01, min(0.99, mastery * math.exp(-days_since_review / max(stability_days, 0.02))))
 
 
+def course_readiness(cards: List[dict], at: datetime) -> float:
+    """Estimate the chance of naming a uniformly chosen person in a course now."""
+    if not cards:
+        return 0.0
+    recalls = [
+        0.0
+        if card["seen_count"] == 0
+        else predicted_recall(card["mastery"], card["stability_days"], days_since(card["last_reviewed_at"], at))
+        for card in cards
+    ]
+    return sum(recalls) / len(recalls)
+
+
 def adaptive_cards(cards: List[dict], limit: int, now: Optional[datetime] = None) -> List[dict]:
     """Select a useful mix; cards are never excluded for being not due."""
     now = now or datetime.now(timezone.utc)

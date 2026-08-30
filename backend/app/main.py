@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 
 from .database import app_data_dir, connection, initialize_database
 from .importer import available_pdfs, import_pdf
-from .study import adaptive_cards, days_since, predicted_recall, update_memory_state
+from .study import adaptive_cards, course_readiness, days_since, predicted_recall, update_memory_state
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -104,7 +104,20 @@ def courses():
             ORDER BY c.imported_at DESC
             """
         ).fetchall()
-        return [dict(row) for row in rows]
+        current_time = datetime.now(timezone.utc)
+        items = [dict(row) for row in rows]
+        for item in items:
+            progress_rows = conn.execute(
+                """
+                SELECT progress.seen_count, progress.mastery, progress.stability_days, progress.last_reviewed_at
+                FROM card_progress AS progress
+                JOIN cards ON cards.id = progress.card_id
+                WHERE cards.course_id = ? AND cards.reviewed = 1
+                """,
+                (item["id"],),
+            ).fetchall()
+            item["readiness"] = round(course_readiness([dict(row) for row in progress_rows], current_time) * 100)
+        return items
 
 
 @app.get("/api/courses/{course_id}")
@@ -178,7 +191,11 @@ def course_stats(course_id: str):
         ).fetchone()
         distribution = {"new": 0, "learning": 0, "familiar": 0}
         progress_rows = conn.execute(
-            "SELECT seen_count, mastery FROM card_progress JOIN cards ON cards.id = card_progress.card_id WHERE cards.course_id = ? AND cards.reviewed = 1",
+            """
+            SELECT seen_count, mastery, stability_days, last_reviewed_at
+            FROM card_progress JOIN cards ON cards.id = card_progress.card_id
+            WHERE cards.course_id = ? AND cards.reviewed = 1
+            """,
             (course_id,),
         ).fetchall()
         for progress in progress_rows:
@@ -190,9 +207,10 @@ def course_stats(course_id: str):
                 distribution["learning"] += 1
         trend_rows = conn.execute(
             """
-            SELECT ended_at, reviewed_count, right_count
+            SELECT ended_at, readiness_at_completion
             FROM study_sessions
             WHERE course_id = ? AND ended_at IS NOT NULL AND reviewed_count > 0
+                  AND readiness_at_completion IS NOT NULL
             ORDER BY ended_at DESC
             LIMIT 20
             """,
@@ -201,14 +219,14 @@ def course_stats(course_id: str):
         trend = [
             {
                 "ended_at": row["ended_at"],
-                "reviewed_count": row["reviewed_count"],
-                "accuracy": round(row["right_count"] / row["reviewed_count"] * 100),
+                "readiness": round(row["readiness_at_completion"] * 100),
             }
             for row in reversed(trend_rows)
         ]
         result = dict(totals)
+        result["readiness"] = round(course_readiness([dict(row) for row in progress_rows], datetime.now(timezone.utc)) * 100)
         result["distribution"] = distribution
-        result["session_trend"] = trend
+        result["readiness_trend"] = trend
         return result
 
 
@@ -340,10 +358,29 @@ def review(session_id: str, request: ReviewRequest):
 @app.post("/api/sessions/{session_id}/complete")
 def complete_session(session_id: str):
     with connection() as conn:
-        conn.execute("UPDATE study_sessions SET ended_at = COALESCE(ended_at, ?) WHERE id = ?", (now(), session_id))
         session = conn.execute("SELECT * FROM study_sessions WHERE id = ?", (session_id,)).fetchone()
         if not session:
             raise HTTPException(status_code=404, detail="Session not found")
+        completed_at = now()
+        progress_rows = conn.execute(
+            """
+            SELECT progress.seen_count, progress.mastery, progress.stability_days, progress.last_reviewed_at
+            FROM card_progress AS progress
+            JOIN cards ON cards.id = progress.card_id
+            WHERE cards.course_id = ? AND cards.reviewed = 1
+            """,
+            (session["course_id"],),
+        ).fetchall()
+        readiness = course_readiness([dict(row) for row in progress_rows], datetime.fromisoformat(completed_at))
+        conn.execute(
+            """
+            UPDATE study_sessions
+            SET ended_at = COALESCE(ended_at, ?), readiness_at_completion = COALESCE(readiness_at_completion, ?)
+            WHERE id = ?
+            """,
+            (completed_at, readiness, session_id),
+        )
+        session = conn.execute("SELECT * FROM study_sessions WHERE id = ?", (session_id,)).fetchone()
         return dict(session)
 
 

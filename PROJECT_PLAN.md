@@ -191,6 +191,5 @@ Inspect both supplied PDFs, identify their extractable card fields and images, t
 ## Future features
 * Add my personal logo?
 * A way to remove people that drop the class later
-* Add screenshot
-* make version that hosted on my website and usable by others? Upload only, etc?
-
+* make version that hosted on my website and usable by others? Upload only, etc? Not right now. 
+* Add ability to add new people, but it checks for duplicates. Like when a person adds the class, can I just upload a new pdf and it will just bring in the new people. 

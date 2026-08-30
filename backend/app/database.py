@@ -83,7 +83,8 @@ def initialize_database() -> None:
               selected_count INTEGER NOT NULL,
               reviewed_count INTEGER NOT NULL DEFAULT 0,
               right_count INTEGER NOT NULL DEFAULT 0,
-              wrong_count INTEGER NOT NULL DEFAULT 0
+              wrong_count INTEGER NOT NULL DEFAULT 0,
+              readiness_at_completion REAL
             );
 
             CREATE TABLE IF NOT EXISTS review_events (
@@ -110,3 +111,6 @@ def initialize_database() -> None:
                     END
                 """
             )
+        session_columns = {row["name"] for row in conn.execute("PRAGMA table_info(study_sessions)")}
+        if "readiness_at_completion" not in session_columns:
+            conn.execute("ALTER TABLE study_sessions ADD COLUMN readiness_at_completion REAL")
