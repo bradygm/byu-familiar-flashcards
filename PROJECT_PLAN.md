@@ -193,3 +193,4 @@ Inspect both supplied PDFs, identify their extractable card fields and images, t
 * A way to remove people that drop the class later
 * make version that hosted on my website and usable by others? Upload only, etc? Not right now. 
 * Add ability to add new people, but it checks for duplicates. Like when a person adds the class, can I just upload a new pdf and it will just bring in the new people. 
+* Calibrate the memory-model coefficients from local timestamped review data after several courses provide enough responses; validate predictions before treating them as calibrated probabilities.

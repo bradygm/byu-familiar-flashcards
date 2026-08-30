@@ -116,7 +116,11 @@ def courses():
                 """,
                 (item["id"],),
             ).fetchall()
-            item["readiness"] = round(course_readiness([dict(row) for row in progress_rows], current_time) * 100)
+            progress = [dict(row) for row in progress_rows]
+            item["readiness"] = round(course_readiness(progress, current_time) * 100)
+            item["familiar_percent"] = round(
+                sum(row["seen_count"] > 0 and row["mastery"] >= 0.75 for row in progress) / len(progress) * 100
+            ) if progress else 0
         return items
 
 
@@ -225,6 +229,7 @@ def course_stats(course_id: str):
         ]
         result = dict(totals)
         result["readiness"] = round(course_readiness([dict(row) for row in progress_rows], datetime.now(timezone.utc)) * 100)
+        result["familiar_percent"] = round(distribution["familiar"] / len(progress_rows) * 100) if progress_rows else 0
         result["distribution"] = distribution
         result["readiness_trend"] = trend
         return result

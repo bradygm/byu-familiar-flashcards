@@ -142,7 +142,7 @@ button { cursor: pointer; }
 .answer-dot.wrong { background: var(--orange); }
 .flip-hint { margin: auto 0 0; color: var(--muted); font-size: .72rem; }
 
-.stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 23px 0; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin: 23px 0; }
 .stat { padding: 14px 16px; }
 .stat strong { display: block; color: var(--navy); font: 800 1.6rem/1 var(--display); letter-spacing: -.04em; margin-bottom: 5px; }
 .stat span { color: var(--muted); font-size: .8rem; }
@@ -162,6 +162,8 @@ button { cursor: pointer; }
 .distribution-key { display: flex; gap: 15px; margin-top: 9px; color: var(--muted); font-size: .76rem; }
 .distribution-key span { display: flex; gap: 5px; align-items: center; }
 .distribution-key i { width: 8px; height: 8px; display: inline-block; border-radius: 50%; }
+.distribution-summary { display: flex; align-items: baseline; flex-wrap: wrap; gap: 5px; margin: 13px 0 0; color: var(--muted); font-size: .76rem; }
+.distribution-summary strong { color: var(--navy); font: 800 .88rem/1.2 var(--display); }
 .trend-chart svg { width: 100%; height: 126px; display: block; overflow: visible; }
 .trend-chart line { stroke: #d7e3ee; stroke-width: 1; stroke-dasharray: 3 3; }
 .trend-chart text { fill: var(--muted); font-size: 10px; font-family: ui-sans-serif, system-ui, sans-serif; }

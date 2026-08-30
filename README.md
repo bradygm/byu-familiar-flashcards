@@ -57,7 +57,7 @@ The paper supports the use of repeated retrieval for learning names; it does **n
 
 Each card stores two local estimates:
 
-- \(M\), **mastery**, the card's current recall strength;
+- \(M\), **learning strength** (called `mastery` in the code), the card's stored recall strength;
 - \(S\), **stability** in days, how slowly that strength fades.
 
 If \(d\) days have passed since the last review, Familiar estimates current recall probability as:
@@ -67,6 +67,20 @@ $$
 $$
 
 This is a transparent heuristic, not a scientifically calibrated model of an individual learner. It prevents two unwanted behaviors: treating a card as permanently learned after one success, and hiding a card because it has no arbitrary “due” date.
+
+### What the app's metrics mean
+
+**Learning strength** is \(M\), the stored state that changes only when you mark an answer right or wrong. New cards start at 50%. It is not simply the percent of answers correct: a successful retrieval increases it by a portion of the remaining distance to 98%, with a larger gain when the card was harder to retrieve. A wrong answer reduces it to 55% of its previous value, with a 5% floor.
+
+**Predicted recall** is \(\hat p\), the time-sensitive estimate above. It starts from learning strength and falls as time passes; stability determines how quickly. The roster's **Predicted recall** meter is this number for that person today.
+
+A person is **Familiar** when they have been seen at least once and their learning strength reaches 75%:
+
+$$
+\mathrm{Familiar} \iff n > 0 \ \land\ M \ge 0.75.
+$$
+
+The course-card **Familiar** percentage is the share of approved people meeting that threshold. The course-page **Avg. predicted recall** is the mean predicted recall across all approved people; unseen people contribute 0% to this average. It measures the estimated likelihood of naming a randomly selected person today, while Familiar measures how much of the roster has crossed a stable learning threshold.
 
 For a candidate card with \(n\) previous attempts, its adaptive priority is:
 
@@ -94,7 +108,7 @@ M' = \max(0.05, 0.55M),
 S' = \max(0.02, 0.42S).
 $$
 
-For example, a brand-new card begins with a conservative prior rather than 0% or 100%. This means its visible strength is an estimate that becomes more individualized with every answer—not simply `correct / total`.
+For example, a brand-new card begins with a conservative prior rather than 0% or 100%. This means its visible learning strength is an estimate that becomes more individualized with every answer—not simply `correct / total`.
 
 ## Controls
 
