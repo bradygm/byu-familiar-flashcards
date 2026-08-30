@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
 
-def _days_since(timestamp: Optional[str], now: datetime) -> float:
+def days_since(timestamp: Optional[str], now: datetime) -> float:
     if not timestamp:
         return 365.0
     reviewed = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
@@ -26,7 +26,7 @@ def adaptive_cards(cards: List[dict], limit: int, now: Optional[datetime] = None
     scored = []
     for card in cards:
         seen = card["seen_count"]
-        recall = predicted_recall(card["mastery"], card["stability_days"], _days_since(card["last_reviewed_at"], now))
+        recall = predicted_recall(card["mastery"], card["stability_days"], days_since(card["last_reviewed_at"], now))
         uncertainty = 1 / math.sqrt(seen + 1)
         score = (2.2 if seen == 0 else 0) + 3.0 * (1 - recall) + 0.55 * uncertainty + random.random() * 0.25
         scored.append((score, card))
@@ -45,7 +45,7 @@ def update_memory_state(progress: dict, result: str, reviewed_at: datetime) -> D
     """Update persistent mastery and stability after an attempted retrieval."""
     mastery = float(progress["mastery"])
     stability = max(0.02, float(progress["stability_days"]))
-    recall = predicted_recall(mastery, stability, _days_since(progress["last_reviewed_at"], reviewed_at))
+    recall = predicted_recall(mastery, stability, days_since(progress["last_reviewed_at"], reviewed_at))
     if result == "right":
         next_mastery = min(0.98, mastery + (1 - mastery) * (0.22 + 0.18 * (1 - recall)))
         next_stability = min(120.0, stability * (1.45 + 0.7 * (1 - recall)) + 0.03)

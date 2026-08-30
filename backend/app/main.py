@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 
 from .database import app_data_dir, connection, initialize_database
 from .importer import available_pdfs, import_pdf
-from .study import adaptive_cards, update_memory_state
+from .study import adaptive_cards, days_since, predicted_recall, update_memory_state
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -121,7 +121,6 @@ def cards(course_id: str, sort: str = "last"):
     sort_columns = {
         "first": "cards.first_name, cards.last_name",
         "last": "cards.last_name, cards.first_name",
-        "confidence": "progress.mastery ASC, progress.seen_count ASC, cards.last_name, cards.first_name",
     }
     column = sort_columns.get(sort, sort_columns["first"])
     with connection() as conn:
@@ -135,7 +134,18 @@ def cards(course_id: str, sort: str = "last"):
             """,
             (course_id,),
         ).fetchall()
-        return [card_row(row) for row in rows]
+        items = [card_row(row) for row in rows]
+        if sort == "confidence":
+            current_time = datetime.now(timezone.utc)
+            items.sort(
+                key=lambda card: (
+                    predicted_recall(card["mastery"], card["stability_days"], days_since(card["last_reviewed_at"], current_time)),
+                    card["seen_count"],
+                    card["last_name"],
+                    card["first_name"],
+                )
+            )
+        return items
 
 
 @app.get("/api/courses/{course_id}/candidates")
