@@ -8,7 +8,9 @@ Familiar was built to bring science-backed retrieval practice and expanding reca
 
 ## Screenshot
 
-_A screenshot using fictional/demo roster data will be added here before the first public release._
+![Familiar home page](docs/screenshots/home.png)
+
+![Familiar course page with anonymized demo roster data](docs/screenshots/course-page-anonymized.png)
 
 ## Quick start
 
