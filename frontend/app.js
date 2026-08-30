@@ -14,6 +14,20 @@ const courseLink = (course) => `#/course/${course.id}`;
 const portraitUrl = (card) => `/assets/${encodeURI(card.image_path)}`;
 const portrait = (card) => card.image_path ? `<img class="avatar portrait" src="${portraitUrl(card)}" alt="Portrait of ${esc(card.first_name)} ${esc(card.last_name)}">` : `<div class="avatar">${initials(card)}</div>`;
 const studiedLabel = (timestamp) => timestamp ? `Last studied ${new Intl.DateTimeFormat(undefined, {month:'short', day:'numeric', year:'numeric'}).format(new Date(timestamp))}` : 'Ready to learn';
+const shortDate = (timestamp) => timestamp ? new Intl.DateTimeFormat(undefined, {month:'short', day:'numeric'}).format(new Date(timestamp)) : 'Not yet';
+const learningStatus = (card) => !card.seen_count ? 'New' : card.mastery >= .75 ? 'Familiar' : 'Learning';
+const predictedRecall = (card) => {
+  const daysSinceReview = card.last_reviewed_at ? Math.max(0, (Date.now() - new Date(card.last_reviewed_at).getTime()) / 86_400_000) : 365;
+  const estimate = Number(card.mastery) * Math.exp(-daysSinceReview / Math.max(Number(card.stability_days), .02));
+  return Math.max(.01, Math.min(.99, estimate));
+};
+
+function recallMeter(card) {
+  if (!card.seen_count) return `<div class="recall-meter is-new"><div><span>Predicted recall</span><strong>New</strong></div><div class="recall-track"><i></i></div></div>`;
+  const recall = Math.round(predictedRecall(card) * 100);
+  const tone = recall >= 75 ? 'strong' : recall >= 40 ? 'building' : 'weak';
+  return `<div class="recall-meter ${tone}"><div><span>Predicted recall today</span><strong>${recall}%</strong></div><div class="recall-track" role="progressbar" aria-label="Predicted recall today" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${recall}"><i style="width:${recall}%"></i></div></div>`;
+}
 
 async function preloadPortrait(card) {
   if (!card?.image_path) return;
@@ -40,16 +54,67 @@ async function home() {
   }));
 }
 
+function learningPulse(stats) {
+  const distribution = stats.distribution || {new: 0, learning: 0, familiar: 0};
+  const total = distribution.new + distribution.learning + distribution.familiar || 1;
+  const segment = (name) => Math.round(distribution[name] / total * 100);
+  const trend = stats.session_trend?.length ? accuracyTrend(stats.session_trend) : '<p class="fine">Complete a session to see your accuracy trend.</p>';
+  return `<section class="learning-pulse panel"><div class="pulse-heading"><div><div class="eyebrow">Learning pulse</div><h2>How the course is taking shape</h2></div><p class="fine">Click a person to see their learning snapshot.</p></div><div class="pulse-grid"><div><div class="pulse-label"><strong>Course familiarity</strong><span>${distribution.familiar} familiar · ${distribution.learning} learning · ${distribution.new} new</span></div><div class="distribution-bar" aria-label="${distribution.familiar} familiar, ${distribution.learning} learning, ${distribution.new} new"><span class="familiar" style="width:${segment('familiar')}%"></span><span class="learning" style="width:${segment('learning')}%"></span><span class="new" style="width:${segment('new')}%"></span></div><div class="distribution-key"><span><i class="familiar"></i>Familiar</span><span><i class="learning"></i>Learning</span><span><i class="new"></i>New</span></div></div><div class="trend"><div class="pulse-label"><strong>Recent session accuracy</strong><span>Harder adaptive sessions may dip—this is normal.</span></div>${trend}</div></div></section>`;
+}
+
+function accuracyTrend(sessions) {
+  const width = 340;
+  const height = 104;
+  const top = 8;
+  const bottom = 10;
+  const left = 34;
+  const right = 9;
+  const x = (index) => sessions.length === 1 ? (left + width - right) / 2 : left + index * (width - left - right) / (sessions.length - 1);
+  const y = (accuracy) => top + (100 - accuracy) * (height - top - bottom) / 100;
+  const points = sessions.map((session, index) => `${x(index)},${y(session.accuracy)}`).join(' ');
+  const dots = sessions.map((session, index) => `<circle cx="${x(index)}" cy="${y(session.accuracy)}" r="3"><title>${shortDate(session.ended_at)} · ${session.accuracy}% accuracy across ${session.reviewed_count} answers</title></circle>`).join('');
+  const guides = [100, 50, 0].map(value => `<text x="0" y="${y(value) + 3}">${value}%</text><line x1="${left}" x2="${width - right}" y1="${y(value)}" y2="${y(value)}"></line>`).join('');
+  return `<div class="trend-chart"><svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Accuracy across the last ${sessions.length} completed sessions">${guides}<polyline points="${points}"></polyline>${dots}</svg><div class="trend-foot"><span>${shortDate(sessions[0].ended_at)}</span><span>Last ${sessions.length} sessions</span><span>${shortDate(sessions[sessions.length - 1].ended_at)}</span></div></div>`;
+}
+
 async function courseView(courseId) {
   const [course, cards, candidates, stats] = await Promise.all([api(`/courses/${courseId}`), api(`/courses/${courseId}/cards?sort=first`), api(`/courses/${courseId}/candidates`), api(`/courses/${courseId}/stats`)]);
   currentCourse = course;
   const accuracy = stats.reviews ? Math.round(stats.right_count / stats.reviews * 100) : 0;
-  setView(`<a class="back" href="#/">← All courses</a><section class="section-head" style="margin-top:25px"><div><div class="eyebrow">${esc(course.source_filename)}</div><h1>${esc(course.title)}</h1><p>${cards.length} approved cards · ${candidates.length} waiting for review</p></div><div class="actions"><button class="button secondary" id="review-candidates">Review imports</button><button class="button secondary" id="add-card">Add person</button><button class="button" id="start-study">Start session</button></div></section><section class="stats" aria-label="Course statistics"><article class="stat panel"><strong>${stats.session_count}</strong><span>sessions</span></article><article class="stat panel"><strong>${stats.reviews}</strong><span>answers</span></article><article class="stat panel"><strong>${accuracy}%</strong><span>accuracy</span></article><article class="stat panel"><strong>${stats.wrong_count}</strong><span>misses</span></article></section><div class="toolbar"><input class="search" id="search" placeholder="Search people" aria-label="Search people"><select class="select" id="sort" aria-label="Sort roster"><option value="first">First name</option><option value="last">Last name</option><option value="confidence">Confidence (low first)</option></select></div><div id="roster"></div>`);
+  setView(`<a class="back" href="#/">← All courses</a><section class="section-head" style="margin-top:25px"><div><div class="eyebrow">${esc(course.source_filename)}</div><h1>${esc(course.title)}</h1><p>${cards.length} approved cards · ${candidates.length} waiting for review</p></div><div class="actions"><button class="button secondary" id="review-candidates">Review imports</button><button class="button secondary" id="add-card">Add person</button><button class="button" id="start-study">Start session</button></div></section><section class="stats" aria-label="Course statistics"><article class="stat panel"><strong>${stats.session_count}</strong><span>sessions</span></article><article class="stat panel"><strong>${stats.reviews}</strong><span>answers</span></article><article class="stat panel"><strong>${accuracy}%</strong><span>accuracy</span></article><article class="stat panel"><strong>${stats.wrong_count}</strong><span>misses</span></article></section>${learningPulse(stats)}<div class="toolbar"><input class="search" id="search" placeholder="Search people" aria-label="Search people"><select class="select" id="sort" aria-label="Sort roster"><option value="first">First name</option><option value="last">Last name</option><option value="confidence">Confidence (low first)</option></select></div><div id="roster"></div>`);
   const roster = document.querySelector('#roster');
-  function renderRoster(items) { roster.innerHTML = items.length ? `<div class="roster">${items.map(card => `<article class="person panel">${portrait(card)}<h2>${esc(card.first_name)} ${esc(card.last_name)}</h2><div class="fine">${card.seen_count ? `${card.right_count}/${card.seen_count} correct` : 'New to you'}</div><span class="tag">recall strength ${Math.round(card.mastery * 100)}%</span></article>`).join('')}</div>` : `<div class="empty"><h2>No approved cards yet.</h2><p>Review the imported candidates, or add cards after your first successful PDF import.</p></div>`; }
+  const flippedCards = new Set();
+  const histories = new Map();
+  let visibleCards = cards;
+  const cardMarkup = (card) => {
+    const history = histories.get(card.id) || [];
+    const flipped = flippedCards.has(card.id);
+    const dots = history.length ? history.map(event => `<i class="answer-dot ${event.result}" title="${event.result === 'right' ? 'Correct' : 'Missed'} · ${shortDate(event.reviewed_at)}" aria-label="${event.result === 'right' ? 'Correct' : 'Missed'} on ${shortDate(event.reviewed_at)}"></i>`).join('') : '<span class="fine">No answers yet</span>';
+    const historyRange = history.length ? `<small>${shortDate(history[0].reviewed_at)} → ${shortDate(history[history.length - 1].reviewed_at)}</small>` : '';
+    return `<article class="person panel flip-card ${flipped ? 'is-flipped' : ''}" data-card-id="${card.id}" tabindex="0" role="button" aria-pressed="${flipped}" aria-label="${flipped ? 'Hide' : 'Show'} learning snapshot for ${esc(card.first_name)} ${esc(card.last_name)}"><div class="flip-card-inner"><div class="flip-face flip-front">${portrait(card)}<h2>${esc(card.first_name)} ${esc(card.last_name)}</h2><div class="fine">${card.seen_count ? `${card.right_count}/${card.seen_count} correct` : 'New to you'}</div>${recallMeter(card)}<p class="flip-hint">Click for learning snapshot</p></div><div class="flip-face flip-back"><div class="eyebrow">Learning snapshot</div><h2>${esc(card.first_name)} ${esc(card.last_name)}</h2><span class="status-tag status-${learningStatus(card).toLowerCase()}">${learningStatus(card)}</span><dl class="snapshot-stats"><div><dt>Learning strength</dt><dd>${Math.round(card.mastery * 100)}%</dd></div><div><dt>Last studied</dt><dd>${shortDate(card.last_reviewed_at)}</dd></div></dl><div class="answer-history"><span>Recent answers</span><div>${dots}</div>${historyRange}</div><p class="flip-hint">Click to return</p></div></div></article>`;
+  };
+  function renderRoster(items = visibleCards) {
+    visibleCards = items;
+    roster.innerHTML = items.length ? `<div class="roster">${items.map(cardMarkup).join('')}</div>` : `<div class="empty"><h2>No approved cards yet.</h2><p>Review the imported candidates, or add cards after your first successful PDF import.</p></div>`;
+    roster.querySelectorAll('[data-card-id]').forEach(element => {
+      const toggle = async () => {
+        const cardId = element.dataset.cardId;
+        if (flippedCards.has(cardId)) {
+          flippedCards.delete(cardId);
+          renderRoster();
+          return;
+        }
+        if (!histories.has(cardId)) histories.set(cardId, (await api(`/courses/${courseId}/cards/${cardId}/history`)).events);
+        flippedCards.add(cardId);
+        renderRoster();
+      };
+      element.addEventListener('click', toggle);
+      element.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); toggle(); } });
+    });
+  }
   renderRoster(cards);
   document.querySelector('#search').addEventListener('input', event => { const query = event.target.value.toLowerCase(); renderRoster(cards.filter(card => `${card.first_name} ${card.last_name}`.toLowerCase().includes(query))); });
-  document.querySelector('#sort').addEventListener('change', async event => { const sorted = await api(`/courses/${courseId}/cards?sort=${event.target.value}`); cards.splice(0, cards.length, ...sorted); renderRoster(cards); });
+  document.querySelector('#sort').addEventListener('change', async event => { const sorted = await api(`/courses/${courseId}/cards?sort=${event.target.value}`); cards.splice(0, cards.length, ...sorted); renderRoster(cards.filter(card => `${card.first_name} ${card.last_name}`.toLowerCase().includes(document.querySelector('#search').value.toLowerCase()))); });
   document.querySelector('#start-study').addEventListener('click', () => setupView(course, cards.length));
   document.querySelector('#review-candidates').addEventListener('click', () => { location.hash = `#/course/${course.id}/review`; });
   document.querySelector('#add-card').addEventListener('click', () => { location.hash = `#/course/${course.id}/add`; });

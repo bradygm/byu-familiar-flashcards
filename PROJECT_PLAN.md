@@ -189,10 +189,8 @@ flashcards/
 Inspect both supplied PDFs, identify their extractable card fields and images, then prototype the importer against a small reviewed subset from each course. That will validate the local data model before the interface is built around it.
 
 ## Future features
-* BYU specific
 * Add my personal logo?
 * A way to remove people that drop the class later
 * Add screenshot
 * make version that hosted on my website and usable by others? Upload only, etc?
-
 

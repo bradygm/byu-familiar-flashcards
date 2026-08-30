@@ -166,7 +166,56 @@ def course_stats(course_id: str):
             """,
             (course_id,),
         ).fetchone()
-        return dict(totals)
+        distribution = {"new": 0, "learning": 0, "familiar": 0}
+        progress_rows = conn.execute(
+            "SELECT seen_count, mastery FROM card_progress JOIN cards ON cards.id = card_progress.card_id WHERE cards.course_id = ? AND cards.reviewed = 1",
+            (course_id,),
+        ).fetchall()
+        for progress in progress_rows:
+            if progress["seen_count"] == 0:
+                distribution["new"] += 1
+            elif progress["mastery"] >= 0.75:
+                distribution["familiar"] += 1
+            else:
+                distribution["learning"] += 1
+        trend_rows = conn.execute(
+            """
+            SELECT ended_at, reviewed_count, right_count
+            FROM study_sessions
+            WHERE course_id = ? AND ended_at IS NOT NULL AND reviewed_count > 0
+            ORDER BY ended_at DESC
+            LIMIT 20
+            """,
+            (course_id,),
+        ).fetchall()
+        trend = [
+            {
+                "ended_at": row["ended_at"],
+                "reviewed_count": row["reviewed_count"],
+                "accuracy": round(row["right_count"] / row["reviewed_count"] * 100),
+            }
+            for row in reversed(trend_rows)
+        ]
+        result = dict(totals)
+        result["distribution"] = distribution
+        result["session_trend"] = trend
+        return result
+
+
+@app.get("/api/courses/{course_id}/cards/{card_id}/history")
+def card_history(course_id: str, card_id: str):
+    with connection() as conn:
+        card = conn.execute(
+            "SELECT 1 FROM cards WHERE id = ? AND course_id = ? AND reviewed = 1",
+            (card_id, course_id),
+        ).fetchone()
+        if not card:
+            raise HTTPException(status_code=404, detail="Card not found")
+        rows = conn.execute(
+            "SELECT result, reviewed_at FROM review_events WHERE card_id = ? ORDER BY reviewed_at DESC LIMIT 12",
+            (card_id,),
+        ).fetchall()
+        return {"events": [dict(row) for row in reversed(rows)]}
 
 
 @app.post("/api/courses/{course_id}/cards")
